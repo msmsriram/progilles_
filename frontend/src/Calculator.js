@@ -18,7 +18,7 @@ const Calculator = () => {
       UA: UA,
     };
 
-    fetch("http://localhost:8002/calculate_unknowns", {
+    fetch("https://progillesx.onrender.com/calculate_unknowns", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -107,8 +107,8 @@ const Calculator = () => {
       </form>
 
       <h2>Results:</h2>
-      <p>{T_H_OUT}</p>
-      <p>{T_C_OUT}</p>
+      <p>T_H_OUT: {T_H_OUT}</p>
+      <p>T_C_OUT: {T_C_OUT}</p>
     </div>
   );
 };
