@@ -69,10 +69,6 @@ app.post("/calculate_unknowns", (req, res) => {
   res.send(200, { T_H_OUT, T_C_OUT });
 });
 
-app
-  .listen(5000, () => {
-    console.log("server started at port 5000");
-  })
-  .catch((err) => {
-    console.log(err);
-  });
+app.listen(5000, () => {
+  console.log("server started at port 5000");
+});
