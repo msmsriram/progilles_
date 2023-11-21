@@ -23,7 +23,7 @@ const Calculator = () => {
       UA: UA,
     };
     try {
-      await fetch("http://localhost:5000/calculate_unknowns", {
+      await fetch("https://progillesx.onrender.com/calculate_unknowns", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
