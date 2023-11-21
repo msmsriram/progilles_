@@ -141,7 +141,7 @@ app.post("/login", async (req, res) => {
 });
 
 app.use("/welcome", (req, res, next) => {
-  req.send("Welcome !");
+  res.send("Welcome !");
 });
 
 mongoose
