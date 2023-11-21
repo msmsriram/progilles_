@@ -1,6 +1,15 @@
 const express = require("express");
 const bodyParser = require("body-parser");
+require("dotenv").config();
 const cors = require("cors");
+const mongoose = require("mongoose");
+const {
+  EMAIL_ALREADY_EXIST,
+  LOGIN_SUCCESS,
+  REGISTER_SUCCESS,
+  UNAUTHORIZED,
+  SUCCESS,
+} = require("./constants");
 
 const app = express();
 
@@ -21,54 +30,127 @@ app.use((err, req, res, next) => {
   }
 });
 
-app.post("/calculate_unknowns", (req, res) => {
+const userSchema = new mongoose.Schema({
+  name: String,
+  username: {
+    type: String,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    required: "Email id is required",
+    match: [
+      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      "Please fill a valid email address",
+    ],
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+});
+
+const User = mongoose.model("User", userSchema);
+
+app.post("/calculate_unknowns", async (req, res) => {
   const c_p_h = 2,
     c_p_C = 1;
-  const { T_H_IN, T_C_IN, m_dot_H, m_dot_C, UA } = req.body;
+  // Given values
+  let { T_H_IN, T_H_OUT, T_C_IN, T_C_OUT, m_dot_H, m_dot_C, UA } = req.body;
 
-  let T_H_OUT = 0;
-  let T_C_OUT = 0;
+  let result;
 
-  // Calculate temperature differences
-  const DeltaT_H = T_H_IN - T_H_OUT;
-  const DeltaT_C = T_C_OUT - T_C_IN;
-
-  // Calculate heat transfer rates
-  const Q_H = m_dot_H * c_p_h * DeltaT_H;
-  const Q_C = m_dot_C * c_p_C * DeltaT_C;
-
-  // Check if UA is sufficient for heat transfer
-  if (UA <= 0) {
-    throw new Error("Error: Insufficient data");
-  }
-  if (Q_H <= 0) {
-    throw new Error("Error: Insufficient data");
-  }
-  if (Q_C >= 0) {
-    throw new Error("Error: Insufficient data");
+  // Case 1: T_H_OUT is missing
+  if (T_H_OUT === null) {
+    m_dot_H = (T_H_IN - T_C_OUT) / UA;
+    T_H_OUT = T_H_IN - m_dot_H * UA;
   }
 
-  // Calculate log mean temperature difference
-  const T_D_1 = T_H_IN - T_C_OUT;
-  const T_D_2 = T_H_OUT - T_C_IN;
+  // Case 2: m_dot_H is missing
+  else if (m_dot_H === null) {
+    m_dot_H = (T_H_IN - T_H_OUT) / UA;
+  }
 
-  // Ensure positive logarithmic argument
-  const smallValue = 1e-10;
-  const LMTD = Math.abs(
-    (T_D_1 - T_D_2) /
-      Math.log((Math.abs(T_D_1) + smallValue) / (Math.abs(T_D_2) + smallValue))
-  );
+  // Case 3: T_C_OUT is missing
+  else if (T_C_OUT === null) {
+    m_dot_H = (T_H_IN - T_H_OUT) / UA;
+    T_C_OUT = T_H_IN - m_dot_H * UA;
+  }
 
-  // Calculate overall heat transfer
-  const Q_LMTD = UA * LMTD;
+  // Case 4: m_dot_C is missing
+  else if (m_dot_C === null) {
+    m_dot_C = (T_H_IN - T_C_OUT) / UA;
+  }
 
-  // Solve for the unknowns
-  T_H_OUT = T_H_IN - Q_H / (m_dot_H * c_p_h);
-  T_C_OUT = T_C_IN - Q_C / (m_dot_C * c_p_C);
+  // Case 5: T_H_IN is missing
+  else if (T_H_IN === null) {
+    T_H_IN = T_H_OUT + m_dot_H * UA;
+  }
 
-  res.send(200, { T_H_OUT, T_C_OUT });
+  // Case 6: T_C_IN is missing
+  else if (T_C_IN === null) {
+    T_C_IN = T_C_OUT + m_dot_C * UA;
+  }
+
+  // Case 7: UA is missing
+  else if (UA === null) {
+    UA = (T_H_IN - T_H_OUT) / m_dot_H;
+  }
+
+  // Display the results
+  result = {
+    T_H_OUT: T_H_OUT,
+    T_C_OUT: T_C_OUT,
+    T_H_IN: T_H_IN,
+    T_C_IN: T_C_IN,
+    m_dot_H: m_dot_H,
+    m_dot_C: m_dot_C,
+    UA: UA,
+  };
+
+  res.status(SUCCESS.status).send({ result: result, message: SUCCESS.message });
 });
 
-app.listen(5000, () => {
-  console.log("server started at port 5000");
+app.post("/register", async (req, res) => {
+  const { username, name, password } = req.body;
+  const user = await User.find({ username: username, password: password });
+  if (user.length === 0) {
+    const newUser = new User({
+      username: username,
+      name: name,
+      password: password,
+    });
+    await newUser.save();
+    res
+      .status(REGISTER_SUCCESS.status)
+      .send({ user: user, message: REGISTER_SUCCESS.message });
+  } else {
+    throw Error(EMAIL_ALREADY_EXIST.message);
+  }
 });
+
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+  const user = await User.find({ username: username, password: password });
+  if (user) {
+    res
+      .status(LOGIN_SUCCESS.status)
+      .send({ user: user, message: LOGIN_SUCCESS.message });
+  } else {
+    throw Error(UNAUTHORIZED.message);
+  }
+});
+
+app.use("/welcome", (req, res, next) => {
+  req.send("Welcome !");
+});
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    app.listen(process.env.PORT || 5000, () => {
+      console.log("Server started and db connected");
+    });
+  })
+  .catch((err) => {
+    console.log(err);
+  });
